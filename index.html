@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Divine Favor Learning Center — Results Portal</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:#f5f7fb;color:#172033}
+header{background:#172554;color:#fff;padding:24px 20px}main{max-width:1100px;margin:0 auto;padding:24px 16px}
+.card{background:#fff;border-radius:16px;padding:20px;margin-bottom:18px;box-shadow:0 6px 24px #17203312}
+h1,h2,h3{margin-top:0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+label{display:block;font-weight:700;margin:10px 0 6px}input,select,textarea,button{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:9px;font:inherit}
+button{background:#172554;color:#fff;border:0;font-weight:700;cursor:pointer;margin-top:12px}button.secondary{background:#475569}button.success{background:#166534}
+button:disabled{opacity:.55;cursor:not-allowed}.hidden{display:none}.msg{padding:10px;border-radius:8px;margin:10px 0}.err{background:#fee2e2;color:#991b1b}.ok{background:#dcfce7;color:#166534}
+table{width:100%;border-collapse:collapse;margin-top:12px}th,td{padding:9px;border-bottom:1px solid #e2e8f0;text-align:left}th{background:#f8fafc}
+.small{font-size:.9rem;color:#64748b}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#e2e8f0;font-size:.8rem}
+.subjects{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;align-items:center}.row{display:contents}
+</style>
+</head>
+<body>
+<header><div style="max-width:1100px;margin:auto"><h1>Divine Favor Learning Center</h1><div>Student Results Portal</div></div></header>
+<main>
+<section id="landing">
+<div class="card"><h2>Parent / Student Result Lookup</h2><p class="small">Use the class, term, child's register number and school year supplied by the school.</p>
+<form id="parentForm" class="grid">
+<div><label>Class</label><select id="pClass" required></select></div>
+<div><label>Term</label><select id="pTerm"><option>First Term</option><option>Second Term</option><option>Third Term</option></select></div>
+<div><label>Child's Register Number</label><input id="pNo" type="number" min="1" required></div>
+<div><label>Year</label><input id="pYear" type="number" min="2000" max="2100" value="${new Date().getFullYear()}" required></div>
+<div style="grid-column:1/-1"><button>View Published Result</button></div>
+</form><div id="parentMsg"></div><div id="parentResult"></div></div>
+
+<div class="grid">
+<div class="card"><h2>Teacher Login</h2><form id="teacherLogin"><label>Username / Class</label><input id="tUser" placeholder="e.g. JS1" required><label>Password</label><input id="tPass" type="password" required><button>Teacher Sign In</button></form><div id="teacherMsg"></div></div>
+<div class="card"><h2>Owner Login</h2><form id="ownerLogin"><label>Password</label><input id="oPass" type="password" required><button>Owner Sign In</button></form><div id="ownerMsg"></div></div>
+</div>
+</section>
+
+<section id="staff" class="hidden">
+<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><h2 id="staffTitle"></h2><span id="staffClass" class="pill"></span></div><button id="logout" style="width:auto">Sign Out</button></div></div>
+
+<div class="grid">
+<div class="card"><h3>Add Student</h3><form id="studentForm"><label>Register Number</label><input id="sNo" type="number" min="1" required><label>Student Name</label><input id="sName" required><div id="ownerClassWrap"><label>Class</label><select id="sClass"></select></div><button>Add Student</button></form><div id="studentMsg"></div></div>
+
+<div class="card"><h3>Change My Password</h3><form id="passwordForm"><label>Current password</label><input id="oldPass" type="password" required><label>New password</label><input id="newPass" type="password" minlength="10" required><button>Change Password</button></form><div id="passwordMsg"></div></div>
+</div>
+
+<div class="card"><h3>Enter Result</h3><form id="resultForm">
+<label>Student</label><select id="rStudent" required></select>
+<div class="grid"><div><label>Term</label><select id="rTerm"><option>First Term</option><option>Second Term</option><option>Third Term</option></select></div><div><label>School Year</label><input id="rYear" type="number" min="2000" max="2100" value="${new Date().getFullYear()}" required></div><div><label>Position</label><input id="rPosition" type="number" min="1"></div></div>
+<label>Subjects</label><div id="subjects"></div>
+<label>Comments</label><textarea id="rComments" rows="3" maxlength="1000"></textarea>
+<button>Save Draft</button></form><div id="resultMsg"></div></div>
+
+<div class="card"><h3>Results</h3><div id="resultsTable"></div></div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let me=null, classes=[], students=[];
+
+async function api(url,opts={}) {
+  const r=await fetch(url,{headers:{'Content-Type':'application/json',...(opts.headers||{})},...opts});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error||'Request failed');
+  return data;
+}
+function msg(id,text,good=false){$(id).innerHTML='<div class="msg '+(good?'ok':'err')+'">'+escapeHtml(text)+'</div>'}
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+
+async function loadClasses(){
+ classes=await api('/api/classes');
+ for(const sel of [$('pClass'),$('sClass')]) sel.innerHTML=classes.map(c=>`<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+}
+function showResult(r){
+ let rows=r.scores.map(s=>`<tr><td>${escapeHtml(s.subject)}</td><td>${Number(s.ca).toFixed(2)}</td><td>${Number(s.exam).toFixed(2)}</td><td>${Number(s.total).toFixed(2)}</td></tr>`).join('');
+ $('parentResult').innerHTML=`<div class="card"><h3>${escapeHtml(r.full_name)}</h3>
+ <p>${escapeHtml(r.class_name)} · ${escapeHtml(r.term)} · ${r.school_year} · Register No. ${r.register_no}</p>
+ <table><thead><tr><th>Subject</th><th>CA</th><th>Exam</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>
+ <p><b>Total:</b> ${r.total.toFixed(2)} &nbsp; <b>Average:</b> ${r.average.toFixed(2)}% &nbsp; <b>Position:</b> ${r.position??'—'}</p>
+ <p><b>Comments:</b> ${escapeHtml(r.comments||'—')}</p></div>`;
+}
+$('parentForm').onsubmit=async e=>{e.preventDefault();$('parentResult').innerHTML='';try{const r=await api('/api/login/parent',{method:'POST',body:JSON.stringify({className:$('pClass').value,term:$('pTerm').value,studentNo:Number($('pNo').value),year:Number($('pYear').value)})});msg('parentMsg','Published result found.',true);showResult(r)}catch(e){msg('parentMsg',e.message)}};
+
+async function staffLogin(endpoint,body,msgId){
+ try{const r=await api(endpoint,{method:'POST',body:JSON.stringify(body)});me=r.user;enterStaff();}catch(e){msg(msgId,e.message)}
+}
+$('teacherLogin').onsubmit=e=>{e.preventDefault();staffLogin('/api/login/staff',{username:$('tUser').value,password:$('tPass').value},'teacherMsg')};
+$('ownerLogin').onsubmit=e=>{e.preventDefault();staffLogin('/api/login/owner',{password:$('oPass').value},'ownerMsg')};
+
+async function enterStaff(){
+ $('landing').classList.add('hidden');$('staff').classList.remove('hidden');
+ $('staffTitle').textContent=me.role==='owner'?'Owner Dashboard':'Teacher Dashboard';
+ $('staffClass').textContent=me.role==='owner'?'All classes':me.class_name;
+ $('ownerClassWrap').style.display=me.role==='owner'?'block':'none';
+ await refreshStaff();
+}
+async function refreshStaff(){
+ students=await api('/api/students');
+ $('rStudent').innerHTML=students.map(s=>`<option value="${s.id}">${escapeHtml(s.register_no+' — '+s.full_name+(me.role==='owner'?' ('+s.class_name+')':''))}</option>`).join('');
+ renderSubjects();
+ const results=await api('/api/results');
+ $('resultsTable').innerHTML='<table><thead><tr><th>Student</th><th>Class</th><th>Term</th><th>Year</th><th>Status</th><th>Action</th></tr></thead><tbody>'+
+ results.map(r=>`<tr><td>${escapeHtml(r.register_no+' — '+r.full_name)}</td><td>${escapeHtml(r.class_name)}</td><td>${escapeHtml(r.term)}</td><td>${r.school_year}</td><td>${r.status}</td><td>${me.role==='owner'&&r.status==='draft'?`<button class="success" style="width:auto;margin:0" onclick="publishResult(${r.id})">Publish</button>`:''}</td></tr>`).join('')+'</tbody></table>';
+}
+function renderSubjects(){
+ const defaults=['English Language','Mathematics','Basic Science','Social Studies','Computer Studies'];
+ $('subjects').innerHTML=defaults.map(s=>`<div class="subjects"><input class="subj" value="${s}"><input class="ca" type="number" min="0" max="40" step="0.01" placeholder="CA / 40"><input class="exam" type="number" min="0" max="60" step="0.01" placeholder="Exam / 60"></div>`).join('');
+}
+$('studentForm').onsubmit=async e=>{e.preventDefault();try{await api('/api/students',{method:'POST',body:JSON.stringify({registerNo:Number($('sNo').value),fullName:$('sName').value,classId:me.role==='owner'?Number($('sClass').value):undefined})});msg('studentMsg','Student added.',true);e.target.reset();await refreshStaff()}catch(e){msg('studentMsg',e.message)}};
+$('resultForm').onsubmit=async e=>{e.preventDefault();try{
+ const scores=[...document.querySelectorAll('.subj')].map((x,i)=>({subject:x.value,ca:document.querySelectorAll('.ca')[i].value,exam:document.querySelectorAll('.exam')[i].value})).filter(x=>x.subject);
+ await api('/api/results',{method:'POST',body:JSON.stringify({studentId:Number($('rStudent').value),term:$('rTerm').value,year:Number($('rYear').value),position:$('rPosition').value,comments:$('rComments').value,scores})});
+ msg('resultMsg','Result saved as draft.',true);await refreshStaff();
+}catch(e){msg('resultMsg',e.message)}};
+window.publishResult=async id=>{try{await api('/api/results/'+id+'/publish',{method:'POST'});await refreshStaff()}catch(e){alert(e.message)}};
+$('passwordForm').onsubmit=async e=>{e.preventDefault();try{await api('/api/users/change-password',{method:'POST',body:JSON.stringify({currentPassword:$('oldPass').value,newPassword:$('newPass').value})});msg('passwordMsg','Password changed successfully.',true);e.target.reset()}catch(e){msg('passwordMsg',e.message)}};
+$('logout').onclick=async()=>{await api('/api/logout',{method:'POST'});location.reload()};
+
+(async()=>{try{await loadClasses();const r=await api('/api/me');if(r.user){me=r.user;enterStaff()}}catch(e){console.error(e)}})();
+</script>
+</body>
+</html>
