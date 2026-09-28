@@ -1,7 +1,6 @@
-# Divine Favor Learning Center — Free Supabase + Render
-
-Free starter deployment: Render Free Web Service + Supabase PostgreSQL.
-
-Main files: `server.js`, `public/index.html`, `supabase_setup.sql`, `package.json`, `DEPLOYMENT.md`.
-
-Initial owner: `owner` / `owner2026`. Teacher initial password: same as class username. Change all initial passwords before real use. Never commit `.env` or database credentials.
+# Divine Favor Learning Center Results Portal
+Render-ready Node/Express + Supabase PostgreSQL portal.
+Render: Build `npm install`; Start `npm start`.
+Environment: DATABASE_URL, DATABASE_SSL=true, NODE_ENV=production, TRUST_PROXY=1, SESSION_SECRET.
+Run supabase_setup.sql once in Supabase SQL Editor.
+Initial owner: owner / owner2026. Teacher password initially equals class name.
